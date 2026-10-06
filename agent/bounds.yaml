@@ -5,6 +5,6 @@
 # max_tokens must sit below the harness ceiling in settings.yaml
 # (session_token_ceiling), so that your loop, not the harness, ends the run.
 
-max_steps: 0        # why:
-max_tokens: 0       # why:
-wall_clock_s: 0     # why:
+max_steps: 10        # why: provides sufficient model calls for the agent to complete a typical triage and perform extra searches when needed. A typical triage take about 6-7 calls - read, 2-4 search, post and stop.
+max_tokens: 60000       # why: provides sufficient token budget (for 10 steps) for the agent to generate detailed responses and perform multiple searches without hitting the ceiling, while staying well below the 400,000-token limit.
+wall_clock_s: 180     # why: provides sufficient time for the agent to complete its tasks without being constrained by a very short time limit or a very long one that could lead to unnecessary delays.

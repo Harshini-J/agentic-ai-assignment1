@@ -8,6 +8,14 @@ first user message naming the issue. The agent posts its own comment through
 post_comment. Your loop writes the trace, including trace.end.
 """
 
+from agent.loop import load_bounds, run_loop
+
 
 def run(ctx) -> None:
-    raise NotImplementedError("Assignment 1 Part A, task 5: the agent way")
+    # 1. Load the bounds from agent/bounds.yaml.
+    bounds = load_bounds()
+
+    # 2. Run the loop, which calls the model and tools until it stops or hits a bound.
+    system = ctx.prompt("agent_prompt.md")
+    user_message = f"Triage issue {ctx.issue_number}."
+    run_loop(ctx.client, ctx.tools, system, user_message, bounds, ctx.trace)

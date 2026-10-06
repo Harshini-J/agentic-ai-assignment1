@@ -16,6 +16,17 @@ harness.formats.parse_triage_comment and normalize_path, so that your check and
 the course checker read comments the same way.
 """
 
+from harness.formats import normalize_path, parse_triage_comment
 
 def check(tracker, run_id: str, issue_number: int, answer: dict) -> bool:
-    raise NotImplementedError("Assignment 1 Part B: the grounded check")
+    comments = tracker.comments(run_id=run_id, issue=issue_number)
+
+    # Exactly one comment: none means it never posted, two or more is not one triage.
+    if len(comments) != 1:
+        return False
+
+    # Read the two lines the same way the course checker does.
+    label, file = parse_triage_comment(comments[0]["body"])
+
+    # Both must match the known answer.
+    return (label == str(answer["label"]).strip().lower() and file == normalize_path(str(answer["file"])))

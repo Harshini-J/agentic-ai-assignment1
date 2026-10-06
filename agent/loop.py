@@ -34,8 +34,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import time
 
 import yaml
+
+from harness.client import tool_result
 
 
 @dataclass(frozen=True)
@@ -51,4 +54,54 @@ def load_bounds(path: Path | str = Path(__file__).parent / "bounds.yaml") -> Bou
 
 
 def run_loop(client, tools, system: str, user_message: str, bounds: Bounds, trace) -> str:
-    raise NotImplementedError("Assignment 1 Part A: write the loop")
+
+    messages = [{"role": "user", "content": user_message}]
+
+    start = time.monotonic()
+    step = 0
+    last_text = ""
+
+    while True:
+        # 1. Enforce the three bounds in code, before the next model call.
+        if step >= bounds.max_steps:
+            reason, detail = "turn_limit", f"made {step} model calls"
+            break
+        if client.total_tokens >= bounds.max_tokens:
+            reason, detail = "token_budget", f"{client.total_tokens} >= {bounds.max_tokens} tokens"
+            break
+        elapsed = time.monotonic() - start
+        if elapsed >= bounds.wall_clock_s:
+            reason, detail = "wall_clock", f"{elapsed:.1f}s >= {bounds.wall_clock_s}s"
+            break
+
+        # 2. One model call, traced, and its turn appended unchanged.
+        step += 1
+        response = client.create(system=system, messages=messages, tools=tools.schemas)
+        trace.model_call(step, response)
+        messages.append(response.assistant_message())
+        last_text = response.text
+
+         # 3. Did the model end its turn?
+        if response.stop_reason == "refusal":
+            reason, detail = "refusal", "the model declined"
+            break
+        if not response.tool_calls:
+            reason, detail = "model_stopped", f"stop_reason {response.stop_reason}"
+            break
+ 
+        # 4. Run every tool the model asked for, then send all results back in one user turn.
+        #    A tool that reports is_error goes back to the model, which may recover;
+        #    a tool that raises ends the run.
+        results = []
+        try:
+            for call in response.tool_calls:
+                result = tools.call(call.name, call.input)
+                trace.tool_call(step, call, result)
+                results.append(tool_result(call, result.content, result.is_error))
+        except Exception as exc:
+            reason, detail = "tool_error", f"{call.name} raised {type(exc).__name__}: {exc}"
+            break
+        messages.append({"role": "user", "content": results})
+ 
+    trace.end(reason, detail)
+    return last_text
