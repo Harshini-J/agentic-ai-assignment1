@@ -38,4 +38,4 @@ None of the four layers is completely empty. The assignment includes the three b
 - **Evaluation:** Quality is tested only before release, on 6 known issues.
 - **Observability:** Model calls, tool calls, and run endings are recorded.
 
-Overall, the layers exist, but they are still basic. Observability is the mostly complete, while memory, control, and evaluation could be improved.
+Overall, the layers exist, but they are still basic. Observability is mostly complete, while memory, control, and evaluation could be improved.

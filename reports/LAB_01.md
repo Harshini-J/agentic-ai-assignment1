@@ -51,7 +51,7 @@ prompt tokens at your turn limit.
 
 | Part | How estimated | Tokens |
 |---|---|---|
-| A `search_repo` result | I ran four searches on the code (`export`, `report`, `format`, `error`): each returned 10 lines, 762 to 879 characters, average 821 | ~205 |
+| A `search_repo` result | Four searches were run on the code (`export`, `report`, `format`, `error`): each returned 10 lines, 762 to 879 characters, average 821 | ~205 |
 | The model's tool request and its JSON wrapping | 64 in the smoke test (127 per step − 63 for the result), rounded up for larger requests | ~100 |
 | **A** | | **~300** |
 
@@ -75,7 +75,7 @@ F came out lower than estimated because the ~900-token API overhead taken from `
 
 ### Smoke test
 
-`make bounds-smoke` ran the agent against `NeverStops` (a  model that never stops) on both dev issues, 4191 and 4192. Both runs ended on `turn_limit` after exactly 10 model calls (10,585 tokens each), so the step limit binds before the 60,000-token budget.
+`make bounds-smoke` ran the agent against `NeverStops` (a model that never stops) on both dev issues, 4191 and 4192. Both runs ended on `turn_limit` after exactly 10 model calls (10,585 tokens each), so the step limit binds before the 60,000-token budget.
 
 ## Part B · Results
 The table for all three ways: passes out of 60, per issue out of 10, the spread
@@ -105,8 +105,8 @@ Token, latency, cost and tool-call figures are means per run, except the latency
 | Question | Direct call | Workflow | Agent |
 |---|---|---|---|
 | Does a person approve each step that matters? | No | No | No |
-| Who picks the next step? | My code decides: read the issue, make one model call, and post the answer | My code decides: read the issue, get search terms, search each term, choose the answer, and post it | The model decides: replies with which tool to use next based on the previous result |
-| Who ends the run? | My code ends it after posting the answer (`completed`) | My code ends it after posting the answer (`completed`) | The model ends it when it replies without a tool call (`model_stopped`). The bounds set limits the run if needed |
+| Who picks the next step? | The code decides: read the issue, make one model call, and post the answer | The code decides: read the issue, get search terms, search each term, choose the answer, and post it | The model decides: replies with which tool to use next based on the previous result |
+| Who ends the run? | The code ends it after posting the answer (`completed`) | My code ends it after posting the answer (`completed`) | The model ends it when it replies without a tool call (`model_stopped`). The bounds set limits the run if needed |
 | Position | A fixed script with one model call | Workflow | An agent, bounded from outside |
 
 Per component: in the direct call, the model only decides the content of the answer (label and file). In the workflow, the code decides the overall steps, but the model chooses the search terms. Since we do not limit the number of terms, the model also indirectly decides how many searches are made. In the agent, the model chooses the tools, their inputs, and when to stop, while the code runs the tools and enforces the three bounds. In all three ways, no person approves the comment before it is posted.
@@ -177,7 +177,7 @@ With c = $0.004048 (direct call mean cost per run), m = 0.026071 / 0.004048 = 6.
 
 With f = 0, the blended cost equals the direct call alone, since no issue is sent to the agent.
 
-**Which baseline Gate 4 should use:** I would use the direct call. The assignment uses the workflow because it is the design which we would ship if the agent does not win, but on this evaluation set the direct call performed better. It passed 45/60 issues compared with 23/60 for the workflow, while the costs were close ($0.004048 vs. $0.003721). It also performed better than the workflow-based blend, which would have about 42/60 passes at $0.011171. So, I would use the direct call as the baseline without the agent. Against this baseline, `f = 0` because the agent did not fix any issue that the direct call got wrong.
+**Which baseline Gate 4 should use:** the direct call. The assignment uses the workflow because it is the design which we would ship if the agent does not win, but on this evaluation set the direct call performed better. It passed 45/60 issues compared with 23/60 for the workflow, while the costs were close ($0.004048 vs. $0.003721). It also performed better than the workflow-based blend, which would have about 42/60 passes at $0.011171. So, the direct call is the baseline without the agent. Against this baseline, `f = 0` because the agent did not fix any issue that the direct call got wrong.
 
 **Conclusion for gate 4:** against the direct call, the agent is not worth its multiplier on this evaluation set. It costs 6.4x more per run, f = 0, and it passes fewer issues (40/60 against 45/60).
 
@@ -264,21 +264,35 @@ A per-issue prediction counts as missed when it was off by 4 or more passes out 
 | Miss | What was believed | Trace | Why it was wrong |
 |---|---|---|---|
 | Workflow 4203: 9 → 0 | Searching the error message would find the file. | `workflow-4203-s01-00ce33` | The search only found `src/i18n/en.json`, where the error message is stored. Since the workflow could not search again, it guessed the file. |
-| Workflow 4206: 9 → 1 | The title names the file, so it would be easy. | `workflow-4206-s01-e56221` | The searches mostly found docs and changelog lines, and it chose `src/util/dedupe.ts` instead of the file named in the title. |
+| Workflow 4206: 9 → 1 | The title names the file, so it would be easy. | `workflow-4206-s01-e56221` | The title's file, `src/export/csv.ts`, is a decoy; the bug is in `src/ingest/dedupe.ts`. The searches found mostly docs, and it invented `src/util/dedupe.ts`.|
 | Agent 4204: 7 → 0 | The agent would keep trying until a search worked. | `agent-4204-s01-ecd1e6` | It found relevant code early, but kept searching for names that did not exist. It made 17 searches and hit `turn_limit` without posting. |
 | Agent 4202: 5 → 0 | The label was the hard part. | `agent-4202-s01-56882e` | Two searches found a changelog line about `src/export/`, which led it to choose the wrong file. |
 | Workflow 4202: 5 → 0 | The label was the hard part. | `workflow-4202-s01-e50bd5` | `TSV` found nothing, while `CSV` found the same changelog line. It then posted `src/export/`, which is a folder and could not pass. |
 | Direct 4201: 3 → 10 | Without search, it would guess the file wrong. | `direct-4201-s01-98aa21` | The repository summary was enough for it to name the right file in every run. |
 | Direct 4202: 5 → 10 | Same as 4201. | `direct-4202-s01-4b452d` | Without search, it was not misled by the changelog and named the right file in every run. |
 | Direct 4203: 5 → 10 | Same as 4201. | `direct-4203-s01-58f266` | The summary pointed it to `src/ingest/`, and it named the right file in every run. |
-| Direct 4206: 9 → 5 | The title names the file, so it would be right. | `direct-4206-s01-4cf7b5` and the other 9 runs | The label was always `bug`, but the file split 5–5 between `src/export/csv.ts` and `src/ingest/dedupe.ts`, so it passed only half. |
+| Direct 4206: 9 → 5 | The title names the file, so it would be right. | `direct-4206-s01-4cf7b5` and the other 9 runs | The title's file is a decoy. The label was always `bug`, but 5 runs named `src/export/csv.ts` (wrong) and 5 named `src/ingest/dedupe.ts`.|
 | Workflow 4201: 6 → 10 | Weak search terms might miss the file. | `workflow-4201-s01-817963` | The issue's words (`localhost:3000`, `reset-password`) appear in the code, so the search found the file directly. |
 
 Overall, the predictions assumed that searching would usually help. The actual runs showed that this was not always true. Searching worked well on 4201, but it led both search-based ways to the wrong file on 4202, and the workflow on 4203 and 4206. The direct call passed 4201, 4202, and 4203 without searching.
 
 7. The seven-layer audit: how many layers are empty (`ARCHITECTURE.md`).
 
-Zero layers are completely empty.
+**0 of 7 layers are empty**, but only three are fully present. The full audit and `file:line` references are in `ARCHITECTURE.md`.
+
+| Layer | Status |
+|---|---|
+| Model | Present |
+| Harness | Partial: the prompt grows at every step because old history is not trimmed. |
+| Tools | Present |
+| Memory & State | Partial: nothing carries over between runs. |
+| Control & Policy | Partial: bounds are enforced, but the comment is not checked before posting. |
+| Observability | Present |
+| Evaluation | Partial: testing uses only six known issues. |
+
+It is expected for the four layers to be missing in a first build. In this project, all four have at least some implementation: bounds, traces, and a grounded checker. Observability is the only one that is fully present among these four.
+
+Control and policy is the weakest. The rules to post exactly one comment and use a valid label are only in the prompt, not enforced by code, so the agent could still break them.
 
 ## Part D · The hybrid
 Your hand-off rule, and the Part B traces that led you to it (written before you
@@ -290,23 +304,23 @@ the four would you ship, and why?
 ### Hand-off rule (written before measuring)
 
 **Rule:** The workflow runs as before: it reads the issue, extracts search terms, searches, and chooses a label and file. Before posting, it checks the search results. **If none of the results is from a source code file** (all matches are in `docs/`, `CHANGELOG.md`, `README.md`, or `src/i18n/`, or there are no matches), **and the label is not `question`**, it hands the issue to the agent. Otherwise, the workflow posts its answer.
- 
-**How I chose the rule.** In Part B, the workflow had 37 wrong and 23 correct answers. I tested the three suggested rules on all 60 runs, but they were not very useful, so I read the traces and came up with rule D.
 
-| Rule | Wrong answers handed off | Right answers handed off |
+**How the rule was chosen.** In Part B, the workflow had 37 wrong and 23 correct answers. The three suggested rules were tested on all 60 runs, but they were not very useful, so the traces were read and rule D came from them.
+
+| Rule | Wrong answers handed off (expected) | Right answers handed off (expected) |
 |---|---:|---:|
 | A: every search returned `No matches` | 0/37 | 0/23 |
-| B: chosen file is not in search results | 31/37 | 3/23 |
+| B: chosen file is not in search results | 34/37 | 3/23 |
 | C: no file named and label is not `question` | 0/37 | 0/23 |
 | **D: no source code file in search results and label is not `question`** | **32/37** | **0/23** |
 
 - **A and C** never fired because the workflow always found something and always named a file.
-- **B** caught many wrong answers but also handed off 3 correct ones.
-- **D** caught the most wrong answers and did not hand off any correct ones.
+- **B** caught the most wrong answers but also handed off 3 correct ones (two on 4204, one on 4206).
+- **D** caught almost as many wrong answers as B (32 vs 34) and did not hand off any correct ones.
 
-### Rule D by issue
+### Rule D by issue (expected, from Part B traces)
 
-| Issue | Workflow result | Wrong handed off | Right handed off |
+| Issue | Workflow result (Part B) | Wrong handed off (expected) | Right handed off (expected) |
 |---|---|---:|---:|
 | 4201 | 10 right | 0 | 0 |
 | 4202 | 10 wrong | 10 | 0 |
@@ -324,11 +338,85 @@ the four would you ship, and why?
 
 ### Expected weaknesses
 
-Rule D still hands 18 runs from 4202 and 4204 to the agent, even though the agent also failed on both issues. It also misses 5 of the 9 wrong answers on 4206 because those searches did find source files.
+Rule D would hand off 18 runs on issues 4202 (10) and 4204 (8). These hand-offs add cost but no correct answers, since the agent also scored 0/10 on both issues. The rule also misses 5 of the 9 wrong answers on 4206 because those searches found source code, just not the right file. As a result, the workflow keeps its wrong answer instead of handing off to the agent.
 
-Some trace excerpts cut off search results, so the actual hybrid may fire slightly less often.
+Some trace excerpts cut off search results, so the actual hybrid may fire less often.
 
-**This result is optimistic:** I chose the rule using these same six evaluation issues, so it may not work as well on new issues.
+**This result is optimistic:** the rule was chosen using these same six evaluation issues, so it may not work as well on new issues.
+
+### Results (measured after the rule was written)
+
+| | Direct | Workflow | Agent | Hybrid |
+|---|---:|---:|---:|---:|
+| Passes (of 60) | 45 | 23 | 40 | **35** |
+| Cost per run | $0.004048 | $0.003721 | $0.026071 | **$0.009768** |
+| Runs handed to the agent | – | – | – | **13** |
+
+Hybrid row in full: 35/60 passes, sweeps 3–5, 3 issues at 10/10, 3571.58 prompt tokens and 262.45 output tokens per run, p50 2.331 s, p95 15.966 s, $0.009768 per run, 6.6 tool calls per run on average (max 13).
+
+The hybrid passed 12 more than the workflow and 5 fewer than the agent, at 2.6 times the workflow's cost and 0.37 times the agent's. Each extra correct triage over the workflow cost about $0.03, against about $0.08 for the agent alone.
+
+**Hand-offs:** 13 of 60 runs. Counted from the `end` records: 13 runs ended with an agent-loop reason (such as `model_stopped`), and the other 47 ended with `completed`, written by the runner.
+
+**Did they land where the agent earns its cost?** Yes. The agent did better on 4203 (workflow 0/10, agent 10/10) and 4206 (workflow 1/10, agent 10/10). All 13 hand-offs were on these two issues, and none were on the other four.
+
+| Issue | Agent earns its cost (Part C)? | Hand-offs (expected) | Hand-offs (actual) | Hybrid passes |
+|---|---|---:|---:|---:|
+| 4201 | No | 0 | 0 | 10 |
+| 4202 | No | 10 | 0 | 0 |
+| 4203 | **Yes** | 10 | **10** | 10 |
+| 4204 | No | 8 | 0 | 2 |
+| 4205 | No | 0 | 0 | 10 |
+| 4206 | **Yes** | 4 | **3** | 3 |
+| **Total** | | **32** | **13** | **35** |
+
+On 4203, all 10 runs were handed off and passed, matching the agent's results. On 4206, only 3 runs were handed off, so the hybrid missed most of the agent's benefit. Issues 4202 and 4204 were never handed off, so their results stayed the same as the workflow's: 0 and 2 passes. The 18 wasted hand-offs predicted for 4202 and 4204 did not happen: in the live runs, their full search results included a source file that the trace excerpts had cut off.
+
+**Measured cost against the Part C blend:** $0.009768 measured, against $0.011171 blended. The gap has two causes:
+
+1. **Fewer runs went to the agent, so the hybrid was cheaper.** The blend assumed 33% of runs would use the agent, but the hybrid handed off only 13 of 60 runs (21.7%). With 21.7% in the same blend formula, the estimate would be 0.003721 × [(1 − 0.217) + 0.217 × 7.01] ≈ $0.0086.
+
+2. **Each run that went to the agent cost extra, which made it more expensive.** The blend counts a handed-off run as one agent run. In the hybrid, a handed-off run pays for both: first the workflow's steps (extract, search, choose), then the full agent run. So the real cost came out above $0.0086, at $0.0098.
+
+**Does it change the Part C verdict?** By the condition written in Part C, it should: Part C said the verdict changes to workflow if the hybrid does not beat the direct call (45/60 at $0.004048), and it did not (35/60 at $0.009768, 2.4 times the cost). The verdict here stays hybrid anyway, which departs from that condition. The reason is that the condition compared the hybrid with the wrong alternative. The verdict chooses among agent, workflow and hybrid, and switching to workflow would make things worse: the workflow passed 23/60 against the hybrid's 35/60. Among those three, the hybrid is still the best trade-off: 12 more passes than the workflow and only 5 fewer than the agent, at 37% of the agent's cost.
+
+**Which of the four to ship.** For this repository, the direct call is the one to ship, provided `repo_summary.md` is kept up to date. It had the most passes (45/60), low cost ($0.004048), and the lowest p50 latency (0.93 s). However, it can guess the wrong file when the summary falls short, as seen on 4206. If the summary cannot be maintained or the repository grows, the hybrid is the better choice because it searches first and hands off when it finds no source code. Unlike the direct call, the hybrid can search the live code when the repository summary is incomplete. These results are limited because all approaches were tested on the same six issues, and the hybrid rule was chosen using those issues.
 
 ## Assistance
 Which AI tool, what it wrote, what you checked.
+
+**AI tools:** Anthropic Claude Code; GitHub Copilot (inline autocomplete in VS Code)
+
+**Date:** 5 - 9 October 2026
+
+**Understanding the existing codebase:** Claude Code helped me understand the starter code before I wrote my own: what each tool in `tools/` does and where its definition (`SCHEMA`) is, what the harness provides (`harness/client.py`, `harness/trace.py`, `harness/runner.py`, `harness/formats.py`, `harness/tracker.py`), what `ctx` provides (`ctx.prompt`, `ctx.call_tool`, `ctx.issue_number`, `ctx.repo_summary`), and where each format is defined in `checks/FORMATS.md`.
+
+I used it to explain parts of the assignment I didn't understand. 
+
+- **Part 0:** how each metric is calculated from the recorded trace, and why a repeated message ID is counted once.
+- **Part A:** how the loop in `agent/loop.py` works, how to estimate F, A and the worst-case cumulative prompt tokens, and how and why bounds are chosen.
+- **Part B:** what the grounded check is, and what each field in `eval/summarize.py` means (sweeps, all-ten, percentiles, cached tokens).
+- **Part C:** path entropy and which part of the agent is not earning its cost; the four gates; and what "which trace shows why it was wrong" means.
+- **Part D:** what a hand-off is, how to choose a hand-off rule from the workflow traces, and how to count hand-offs from the `end` records.
+
+**What it wrote:**
+
+- Claude Code: drafts of all the prompts in `prompts/`, `eval/summarize.py` and `eval/worst_case.py`, which I edited and ran
+- Claude Code: one-off commands for reading and understanding traces and testing hand-off rules
+- Claude Code: parts of `loop.py`, where it helped me understand the sequence of how it flows and helped with some parts of drafts.
+- Claude Code: `part0.py`, reading and parsing the JSONL correctly and writing the results to `LAB_01.json` (the metrics and calculations were done by me, with GitHub Copilot autocomplete)
+- Claude Code: `hybrid.py`, a draft of the `found_code` function
+- Claude Code: `ARCHITECTURE.md`, searched the repo and identified where the model call and tools are invoked
+- GitHub Copilot: inline autocomplete suggestions while I was coding
+
+
+**What I checked:**
+
+- **Prompts in `prompts/`:** Tested each approach on the dev issues and reviewed the traces. Updated the direct-call prompt after it posted an incomplete answer and the workflow prompt after it used search terms that returned "No matches."
+- **`eval/summarize.py` and `eval/worst_case.py`:** Checked the fields against `checks/FORMATS.md` (Sections 4 and 7), compared the summary with the Part B results and Part C calculations, and verified the worst-case formula: 10 × 966 + 354 × 45 = 25,590.
+- **`agent/loop.py`:** Ran `make check-01` to test the bounds and `make bounds-smoke` to confirm both runs stopped at `turn_limit` after 10 model calls.
+- **`eval/part0.py`:** Compared its output with the recorded run and ran `make check-01`.
+- **Hand-off rule and `ways/hybrid.py`:** Rechecked the rule counts on all 60 workflow traces, tested `found_code` with the `question` exception, and confirmed it. Also ran a dev test and checked hand-offs and passes per issue after evaluation.
+- **60-run results:** Verified pass/fail using `eval/check_triage.py`, which checks the actual tracker comments. Ran `make check-01` to recompute counts and means, and spot-checked individual traces.
+- **`ARCHITECTURE.md`:** Verified each `file:line` reference using `grep -n`.
+- I checked every autocomplete suggestion manually.
