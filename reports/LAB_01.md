@@ -106,7 +106,7 @@ Token, latency, cost and tool-call figures are means per run, except the latency
 |---|---|---|---|
 | Does a person approve each step that matters? | No | No | No |
 | Who picks the next step? | The code decides: read the issue, make one model call, and post the answer | The code decides: read the issue, get search terms, search each term, choose the answer, and post it | The model decides: replies with which tool to use next based on the previous result |
-| Who ends the run? | The code ends it after posting the answer (`completed`) | My code ends it after posting the answer (`completed`) | The model ends it when it replies without a tool call (`model_stopped`). The bounds set limits the run if needed |
+| Who ends the run? | The code ends it after posting the answer (`completed`) | The code ends it after posting the answer (`completed`) | The model ends it when it replies without a tool call (`model_stopped`). The bounds set limits the run if needed |
 | Position | A fixed script with one model call | Workflow | An agent, bounded from outside |
 
 Per component: in the direct call, the model only decides the content of the answer (label and file). In the workflow, the code decides the overall steps, but the model chooses the search terms. Since we do not limit the number of terms, the model also indirectly decides how many searches are made. In the agent, the model chooses the tools, their inputs, and when to stop, while the code runs the tools and enforces the three bounds. In all three ways, no person approves the comment before it is posted.
@@ -264,14 +264,14 @@ A per-issue prediction counts as missed when it was off by 4 or more passes out 
 | Miss | What was believed | Trace | Why it was wrong |
 |---|---|---|---|
 | Workflow 4203: 9 → 0 | Searching the error message would find the file. | `workflow-4203-s01-00ce33` | The search only found `src/i18n/en.json`, where the error message is stored. Since the workflow could not search again, it guessed the file. |
-| Workflow 4206: 9 → 1 | The title names the file, so it would be easy. | `workflow-4206-s01-e56221` | The title's file, `src/export/csv.ts`, is a decoy; the bug is in `src/ingest/dedupe.ts`. The searches found mostly docs, and it invented `src/util/dedupe.ts`.|
+| Workflow 4206: 9 → 1 | The title names the file, so it would be easy. | `workflow-4206-s01-e56221` | The searches mostly found docs and changelog lines, and it chose `src/util/dedupe.ts` instead of the file named in the title. |
 | Agent 4204: 7 → 0 | The agent would keep trying until a search worked. | `agent-4204-s01-ecd1e6` | It found relevant code early, but kept searching for names that did not exist. It made 17 searches and hit `turn_limit` without posting. |
 | Agent 4202: 5 → 0 | The label was the hard part. | `agent-4202-s01-56882e` | Two searches found a changelog line about `src/export/`, which led it to choose the wrong file. |
 | Workflow 4202: 5 → 0 | The label was the hard part. | `workflow-4202-s01-e50bd5` | `TSV` found nothing, while `CSV` found the same changelog line. It then posted `src/export/`, which is a folder and could not pass. |
 | Direct 4201: 3 → 10 | Without search, it would guess the file wrong. | `direct-4201-s01-98aa21` | The repository summary was enough for it to name the right file in every run. |
 | Direct 4202: 5 → 10 | Same as 4201. | `direct-4202-s01-4b452d` | Without search, it was not misled by the changelog and named the right file in every run. |
-| Direct 4203: 5 → 10 | Same as 4201. | `direct-4203-s01-58f266` | The summary pointed it to `src/ingest/`, and it named the right file in every run. |
-| Direct 4206: 9 → 5 | The title names the file, so it would be right. | `direct-4206-s01-4cf7b5` and the other 9 runs | The title's file is a decoy. The label was always `bug`, but 5 runs named `src/export/csv.ts` (wrong) and 5 named `src/ingest/dedupe.ts`.|
+| Direct 4203: 5 → 10 | Same as 4201. | `direct-4203-s01-58f266` | The summary pointed it to the right part of the code, and it named the right file in every run. |
+| Direct 4206: 9 → 5 | The title names the file, so it would be right. | `direct-4206-s01-4cf7b5` and the other 9 runs | The label was always `bug`, but the file split 5–5 between `src/export/csv.ts` and `src/ingest/dedupe.ts`, so it passed only half. |
 | Workflow 4201: 6 → 10 | Weak search terms might miss the file. | `workflow-4201-s01-817963` | The issue's words (`localhost:3000`, `reset-password`) appear in the code, so the search found the file directly. |
 
 Overall, the predictions assumed that searching would usually help. The actual runs showed that this was not always true. Searching worked well on 4201, but it led both search-based ways to the wrong file on 4202, and the workflow on 4203 and 4206. The direct call passed 4201, 4202, and 4203 without searching.
@@ -332,7 +332,7 @@ the four would you ship, and why?
 ### What the traces showed
 
 - **4203:** The search only found `src/i18n/en.json`, so the workflow guessed the code file.
-- **4201:** The search found `src/notifications/templates.ts`, and the workflow got the answer right.
+- **4201:** The search found a source file matching the issue's own words, and the workflow got the answer right.
 - **4204:** The two runs that found a source file were right; the other eight were wrong.
 - **4205:** The workflow correctly answered `question` with `file: none`, so the rule keeps this case from being handed off.
 
